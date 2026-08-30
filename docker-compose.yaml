@@ -1,0 +1,96 @@
+version: '3.8'
+
+services:
+  # Твой сервис API (добавляем его к твоей структуре)
+  api:
+    build:
+      context: .
+      dockerfile: ./services/api/Dockerfile
+    container_name: api_service
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DB_PATH=/app/data/sqlite/excercise.db
+    networks:
+      - my_network
+
+  checker:
+    build:
+      context: .
+      dockerfile: ./services/checker/Dockerfile
+    container_name: checker
+    ports:
+      - "${TCP_PORT}:${TCP_PORT}"
+      - "${WS_PORT}:${WS_PORT}"
+    depends_on:
+      - rabbitmq
+      - minio
+    volumes: # Добавляем тома для доступа к картинкам и базе данных
+      - ./data:/app/data
+    environment:
+      - TCP_PORT=${TCP_PORT}
+      - WS_PORT=${WS_PORT}
+      - DB_PATH=/app/data/sqlite/excercise.db
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/
+    networks:
+      - my_network
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    volumes:
+      - rmq_data:/var/lib/rabbitmq
+    networks:
+      - my_network
+
+
+  minio:
+    platform: linux/x86_64
+    image: minio/minio
+    container_name: minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - min_data:/data
+    command: server /data --console-address ":9001"
+    restart: always
+    networks:
+      - my_network
+
+  mc:
+    image: minio/mc:latest
+    container_name: minio_mc
+    depends_on:
+      - minio
+    entrypoint: >
+      sh -c "
+        until mc alias set myminio http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD}; do sleep 1; done &&
+        mc mb myminio/images &&
+        mc anonymous set public myminio/images
+      "
+    restart: "no"
+    networks:
+      - my_network
+  
+volumes:
+  min_data:
+  rmq_data:
+
+networks:
+  my_network:
+    driver: bridge
