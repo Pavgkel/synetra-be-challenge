@@ -119,6 +119,7 @@ $ docker compose down
 1. компиляция и запуск контейнера с логами:
    ```bash
    docker compose build --no-cache
+   docker compose up -d --build
    docker compose ps
    docker compose logs -f checker
    ```
@@ -129,5 +130,5 @@ $ docker compose down
    ```
 3. запуск автоматического тестирования:
    ```bash
-   pytest -c /dev/null tests/
+   pytest -c /dev/null test/
    ```
